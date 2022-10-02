@@ -1469,21 +1469,22 @@ class Router(Node):
                 if not running:
                     break
 
-        if not running:
-            return ""
+        if running:
+            logger.warning(
+                "%s: sending SIGBUS to: %s",
+                self.name,
+                ", ".join([x[0] for x in running]),
+            )
+            for name, pid in running:
+                pidfile = "/var/run/{}/{}.pid".format(self.routertype, name)
+                logger.info("%s: killing %s", self.name, name)
+                self.cmd("kill -SIGBUS %d" % pid)
+                self.cmd("rm -- " + pidfile)
 
-        logger.warning(
-            "%s: sending SIGBUS to: %s", self.name, ", ".join([x[0] for x in running])
-        )
-        for name, pid in running:
-            pidfile = "/var/run/{}/{}.pid".format(self.routertype, name)
-            logger.info("%s: killing %s", self.name, name)
-            self.cmd("kill -SIGBUS %d" % pid)
-            self.cmd("rm -- " + pidfile)
-
-        sleep(
-            0.5, "%s: waiting for daemons to exit/core after initial SIGBUS" % self.name
-        )
+            sleep(
+                0.5,
+                "%s: waiting for daemons to exit/core after initial SIGBUS" % self.name,
+            )
 
         errors = self.checkRouterCores(reportOnce=True)
         if self.checkRouterVersion("<", minErrorVersion):
@@ -1683,7 +1684,11 @@ class Router(Node):
         return self.getLog("out", daemon)
 
     def getLog(self, log, daemon):
-        return self.cmd("cat {}/{}/{}.{}".format(self.logdir, self.name, daemon, log))
+        filename = "{}/{}/{}.{}".format(self.logdir, self.name, daemon, log)
+        log = ""
+        with open(filename) as file:
+            log = file.read()
+        return log
 
     def startRouterDaemons(self, daemons=None, tgen=None):
         "Starts FRR daemons for this router."
